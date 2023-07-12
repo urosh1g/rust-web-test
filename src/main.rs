@@ -1,6 +1,7 @@
+mod models;
 mod routes;
 
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, App, HttpServer, Responder};
 use dotenv::dotenv;
 use sqlx::{
     postgres::{PgPoolOptions, Postgres},
@@ -23,17 +24,11 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::<AppState>::new(AppState {
                 db_pool: db.clone(),
             }))
-            .service(hello)
             .configure(routes::users::config)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
     .await
-}
-
-#[get("/helou")]
-async fn hello() -> impl Responder {
-    HttpResponse::Ok().json("ic ol gud")
 }
 
 pub struct AppState {
