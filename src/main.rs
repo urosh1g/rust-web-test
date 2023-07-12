@@ -1,7 +1,7 @@
 mod models;
 mod routes;
 
-use actix_web::{web, App, HttpServer, Responder};
+use actix_web::{web, App, HttpServer};
 use dotenv::dotenv;
 use sqlx::{
     postgres::{PgPoolOptions, Postgres},
