@@ -1,4 +1,6 @@
-use actix_web;
+mod routes;
+
+use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use dotenv::dotenv;
 use sqlx::{
     postgres::{PgPoolOptions, Postgres},
@@ -10,9 +12,32 @@ use std::env;
 async fn main() -> std::io::Result<()> {
     let db_config = read_configuration();
     println!("Successfully read the .env config");
-    let _ = db_connect(db_config).await;
+    let db = db_connect(db_config).await;
+    sqlx::migrate!("./migrations")
+        .run(&db)
+        .await
+        .expect("Should be able to perform migrations");
     println!("Successfully connected to the database");
-    Ok(())
+    HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::<AppState>::new(AppState {
+                db_pool: db.clone(),
+            }))
+            .service(hello)
+            .configure(routes::users::config)
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
+}
+
+#[get("/helou")]
+async fn hello() -> impl Responder {
+    HttpResponse::Ok().json("ic ol gud")
+}
+
+pub struct AppState {
+    pub db_pool: Pool<Postgres>,
 }
 
 struct DbConfig {
@@ -23,6 +48,7 @@ struct DbConfig {
 fn read_configuration() -> DbConfig {
     dotenv().expect("Should be able to read environment variables");
     let conn_str = env::var("DATABASE_URL").expect("Should be able to read connection string");
+    // TODO nadji lepsi nacin za parsiranje
     let max_conn: u32 = match env::var("MAX_CONNECTIONS") {
         Ok(val) => val.parse().unwrap_or(100),
         Err(_) => 100,
