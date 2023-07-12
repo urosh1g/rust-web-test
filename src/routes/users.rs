@@ -2,7 +2,7 @@ use crate::{
     models::user::{NewUser, UpdateUser, User},
     AppState,
 };
-use actix_web::{delete, get, patch, post, web, web::Path, HttpResponse, Responder};
+use actix_web::{delete, get, post, put, web, web::Path, HttpResponse, Responder};
 //TODO
 //mozda moze lepsi error handling
 
@@ -54,7 +54,7 @@ pub async fn add_user(body: web::Json<NewUser>, app_state: web::Data<AppState>) 
     }
 }
 
-#[patch("{user_id}")]
+#[put("{user_id}")]
 pub async fn update_user(
     path: Path<i32>,
     app_data: web::Data<AppState>,
@@ -70,9 +70,6 @@ pub async fn update_user(
         .await;
     let user = match res {
         Ok(option) => option,
-        Err(sqlx::Error::RowNotFound) => {
-            return HttpResponse::NotFound().json("user not found");
-        }
         Err(err) => {
             return HttpResponse::InternalServerError().json(err.to_string());
         }
@@ -114,6 +111,7 @@ pub fn config(cfg: &mut web::ServiceConfig) {
         .service(add_user)
         .service(get_users)
         .service(get_user)
-        .service(delete_user);
+        .service(delete_user)
+        .service(update_user);
     cfg.service(scope);
 }
