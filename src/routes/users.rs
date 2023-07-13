@@ -97,11 +97,14 @@ pub async fn update_user(
 #[delete("{user_id}")]
 pub async fn delete_user(path: Path<i32>, app_data: web::Data<AppState>) -> impl Responder {
     let user_id = path.into_inner();
-    let res = sqlx::query!("delete from users where id = $1", user_id)
-        .execute(&app_data.db_pool)
+    let res = sqlx::query_as!(User, "delete from users where id = $1 returning *", user_id)
+        .fetch_optional(&app_data.db_pool)
         .await;
     match res {
-        Ok(_) => HttpResponse::Ok().json(format!("Sucessfully removed user with id {user_id}")),
+        Ok(info) => match info {
+            None => HttpResponse::NotFound().json("asdasd"),
+            Some(user) => HttpResponse::Ok().json(user),
+        },
         Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
     }
 }

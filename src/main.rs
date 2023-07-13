@@ -25,6 +25,7 @@ async fn main() -> std::io::Result<()> {
                 db_pool: db.clone(),
             }))
             .configure(routes::users::config)
+            .configure(routes::articles::config)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
