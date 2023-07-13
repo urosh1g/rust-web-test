@@ -26,6 +26,7 @@ async fn main() -> std::io::Result<()> {
             }))
             .configure(routes::users::config)
             .configure(routes::articles::config)
+            .configure(routes::comments::config)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
