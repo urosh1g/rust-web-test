@@ -43,14 +43,17 @@ pub async fn get_user(path: Path<u32>, _app_data: web::Data<AppState>) -> impl R
 
 #[post("")]
 pub async fn add_user(body: web::Json<NewUser>, app_state: web::Data<AppState>) -> impl Responder {
-    let res = sqlx::query("insert into users ( email, password ) values ($1, $2)")
-        .bind(&body.email)
-        .bind(&body.password)
-        .execute(&app_state.db_pool)
-        .await;
+    let res = sqlx::query_as!(
+        User,
+        "insert into users ( email, password ) values ($1, $2) returning *",
+        body.email,
+        body.password,
+    )
+    .fetch_one(&app_state.db_pool)
+    .await;
     match res {
-        Ok(_) => HttpResponse::Created(),
-        Err(_) => HttpResponse::InternalServerError(),
+        Ok(user) => HttpResponse::Created().json(user),
+        Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
     }
 }
 
@@ -61,10 +64,6 @@ pub async fn update_user(
     body: web::Json<UpdateUser>,
 ) -> impl Responder {
     let user_id = path.into_inner();
-    //sqlx::Error::RowNotFound + fetch_optional
-    //da li ima smisla?
-    //ako ne postoji red ( RowNotFound ) onda fetch_optional
-    //sigurno vraca None?
     let res = sqlx::query_as!(User, "select * from users where id = $1", user_id)
         .fetch_one(&app_data.db_pool)
         .await;
@@ -74,22 +73,16 @@ pub async fn update_user(
             return HttpResponse::InternalServerError().json(err.to_string());
         }
     };
-    // puno to_owned() [u pozadini takodje clone()?] i clone() ako je veliki objekat
-    // bljak?
-    let res = sqlx::query!(
-        "update users set email = $1, password = $2 where id = $3",
-        body.email
-            .to_owned()
-            .unwrap_or_else(|| { user.email.clone() }),
-        body.password
-            .to_owned()
-            .unwrap_or_else(|| { user.password.clone() }),
-        user_id
-    )
-    .execute(&app_data.db_pool)
+    let res = sqlx::query_as!(User,
+        "update users set email = coalesce($1, email), password = coalesce($2, password) where id = $3 returning *",body.email, body.password, user_id)
+    .fetch_optional(&app_data.db_pool)
     .await;
+
     match res {
-        Ok(_) => HttpResponse::Ok().json(user),
+        Ok(opt) => match opt {
+            Some(user) => HttpResponse::Ok().json(user),
+            _ => HttpResponse::NotFound().json(format!("user with id {user_id} not found")),
+        },
         Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
     }
 }
