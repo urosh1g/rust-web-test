@@ -1,5 +1,6 @@
 use crate::{
-    models::comment::{Comment, NewComment, UpdateComment},
+    db,
+    models::comment::{NewComment, UpdateComment},
     AppState,
 };
 use actix_web::{
@@ -21,9 +22,7 @@ pub fn config(cfg: &mut web::ServiceConfig) {
 
 #[get("")]
 pub async fn get_comments(data: web::Data<AppState>) -> impl Responder {
-    let res = sqlx::query_as!(Comment, "select * from comments")
-        .fetch_all(&data.db_pool)
-        .await;
+    let res = db::comment::get_comments(&data.db_pool).await;
     match res {
         Ok(vec) => HttpResponse::Ok().json(vec),
         Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
@@ -33,9 +32,7 @@ pub async fn get_comments(data: web::Data<AppState>) -> impl Responder {
 #[get("{comment_id}")]
 pub async fn get_comment(path: Path<i32>, data: web::Data<AppState>) -> impl Responder {
     let comment_id = path.into_inner(); // proveri dal handluje pogresne vrednosti
-    let res = sqlx::query_as!(Comment, "select * from comments where id = $1", comment_id)
-        .fetch_optional(&data.db_pool)
-        .await;
+    let res = db::comment::get_comment(comment_id, &data.db_pool).await;
     match res {
         Ok(opt) => match opt {
             Some(comment) => HttpResponse::Ok().json(comment),
@@ -49,28 +46,7 @@ pub async fn get_comment(path: Path<i32>, data: web::Data<AppState>) -> impl Res
 
 #[post("")]
 pub async fn add_comment(body: web::Json<NewComment>, data: web::Data<AppState>) -> impl Responder {
-    let user = sqlx::query!("select id from users where id = $1", body.user_id)
-        .fetch_one(&data.db_pool)
-        .await;
-    if let Err(_) = user {
-        return HttpResponse::NotFound().json(format!("user with id {} not found", body.user_id));
-    }
-    let article = sqlx::query!("select id from articles where id = $1", body.article_id)
-        .fetch_one(&data.db_pool)
-        .await;
-    if let Err(_) = article {
-        return HttpResponse::NotFound()
-            .json(format!("article with id {} not found", body.article_id));
-    }
-    let res = sqlx::query_as!(
-        Comment,
-        "insert into comments ( user_id, article_id, content ) values ( $1, $2, $3 ) returning *",
-        body.user_id,
-        body.article_id,
-        body.content
-    )
-    .fetch_optional(&data.db_pool)
-    .await;
+    let res = db::comment::add_comment(body.into_inner(), &data.db_pool).await;
     match res {
         Ok(opt) => match opt {
             Some(row) => HttpResponse::Created().json(row),
@@ -87,14 +63,7 @@ pub async fn update_comment(
     data: web::Data<AppState>,
 ) -> impl Responder {
     let comment_id = path.into_inner();
-    let res = sqlx::query_as!(
-        Comment,
-        "update comments set content = $1 where id = $2 returning *",
-        body.content,
-        comment_id
-    )
-    .fetch_optional(&data.db_pool)
-    .await;
+    let res = db::comment::update_comment(comment_id, body.into_inner(), &data.db_pool).await;
     match res {
         Ok(opt) => match opt {
             Some(comment) => HttpResponse::Ok().json(comment),
@@ -107,13 +76,7 @@ pub async fn update_comment(
 #[delete("{comment_id}")]
 pub async fn delete_comment(path: Path<i32>, data: web::Data<AppState>) -> impl Responder {
     let comment_id = path.into_inner();
-    let res = sqlx::query_as!(
-        Comment,
-        "delete from comments where id = $1 returning *",
-        comment_id
-    )
-    .fetch_optional(&data.db_pool)
-    .await;
+    let res = db::comment::delete_comment(comment_id, &data.db_pool).await;
     match res {
         Ok(opt) => match opt {
             Some(comment) => HttpResponse::Ok().json(comment),

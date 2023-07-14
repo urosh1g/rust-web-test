@@ -1,11 +1,16 @@
 use crate::{
-    models::article::{Article, NewArticle, UpdateArticle},
+    auth, db,
+    models::{
+        article::{Article, NewArticle, UpdateArticle},
+        comment::Comment,
+        like::Like,
+    },
     AppState,
 };
 use actix_web::{
     delete, get, post, put,
     web::{self, Path},
-    HttpResponse, Responder,
+    HttpRequest, HttpResponse, Responder,
 };
 
 pub fn config(cfg: &mut web::ServiceConfig) {
@@ -14,17 +19,22 @@ pub fn config(cfg: &mut web::ServiceConfig) {
         .service(add_article)
         .service(get_article)
         .service(update_article)
-        .service(delete_article);
+        .service(delete_article)
+        .service(get_article_comments)
+        .service(get_article_likes);
     cfg.service(scope);
 }
 
 #[get("")]
 pub async fn get_articles(app_data: web::Data<AppState>) -> impl Responder {
-    let res = sqlx::query_as!(Article, "select * from articles")
-        .fetch_all(&app_data.db_pool)
-        .await;
+    let res = db::article::get_articles(&app_data.db_pool).await;
+
     match res {
-        Ok(vec) => HttpResponse::Ok().json(vec),
+        Ok(vec) => HttpResponse::Ok().json(
+            vec.into_iter()
+                .map(|item| Article::from(item))
+                .collect::<Vec<Article>>(),
+        ),
         Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
     }
 }
@@ -34,21 +44,8 @@ pub async fn add_article(
     body: web::Json<NewArticle>,
     app_data: web::Data<AppState>,
 ) -> impl Responder {
-    let exists = sqlx::query!("select * from users where id = $1", body.author_id)
-        .fetch_optional(&app_data.db_pool)
-        .await;
-    if let Err(msg) = exists {
-        return HttpResponse::InternalServerError().json(msg.to_string());
-    }
-    let res = sqlx::query_as!(
-        Article,
-        "insert into articles ( author_id, title, content ) values ( $1, $2, $3 ) returning *",
-        body.author_id,
-        body.title,
-        body.content
-    )
-    .fetch_one(&app_data.db_pool)
-    .await;
+    let res = db::article::add_article(body.into_inner(), &app_data.db_pool).await;
+
     match res {
         Ok(article) => HttpResponse::Created().json(article),
         Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
@@ -58,9 +55,8 @@ pub async fn add_article(
 #[get("{article_id}")]
 pub async fn get_article(path: Path<i32>, app_data: web::Data<AppState>) -> impl Responder {
     let article_id = path.into_inner();
-    let res = sqlx::query_as!(Article, "select * from articles where id = $1", article_id)
-        .fetch_optional(&app_data.db_pool)
-        .await;
+    let res = db::article::get_article(article_id, &app_data.db_pool).await;
+
     match res {
         Ok(optional) => match optional {
             Some(article) => HttpResponse::Ok().json(article),
@@ -70,14 +66,79 @@ pub async fn get_article(path: Path<i32>, app_data: web::Data<AppState>) -> impl
     }
 }
 
+#[get("{article_id}/comments")]
+pub async fn get_article_comments(path: Path<i32>, data: web::Data<AppState>) -> impl Responder {
+    let article_id = path.into_inner();
+    let res = sqlx::query_as!(
+        Comment,
+        "select * from comments where article_id = $1",
+        article_id
+    )
+    .fetch_all(&data.db_pool)
+    .await;
+    match res {
+        Ok(comments) => HttpResponse::Ok().json(comments),
+        Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
+    }
+}
+
+#[get("{article_id}/likes")]
+pub async fn get_article_likes(path: Path<i32>, data: web::Data<AppState>) -> impl Responder {
+    let article_id = path.into_inner();
+    let res = sqlx::query_as!(
+        Like,
+        "select * from likes where article_id = $1",
+        article_id
+    )
+    .fetch_all(&data.db_pool)
+    .await;
+    match res {
+        Ok(likes) => HttpResponse::Ok().json(likes),
+        Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
+    }
+}
+
 #[put("{article_id}")]
 pub async fn update_article(
     body: web::Json<UpdateArticle>,
     path: Path<i32>,
     app_data: web::Data<AppState>,
+    req: HttpRequest,
 ) -> impl Responder {
     let article_id = path.into_inner();
-    let res = sqlx::query_as!(Article, "update articles set title = coalesce($1, title), content = coalesce($2, content) where id = $3 returning *", body.title, body.content, article_id).fetch_optional(&app_data.db_pool).await;
+
+    let auth_cookie = req.cookie("token");
+
+    let res = match auth_cookie {
+        Some(token) => auth::verify_token(token),
+        None => return HttpResponse::Unauthorized().json("asd"),
+    };
+
+    let claims = match res {
+        Err(e) => {
+            eprintln!("{}", e);
+            return HttpResponse::Unauthorized().json("invalid token");
+        }
+        Ok(data) => data,
+    };
+
+    let user_id: i32 = claims.claims.sub;
+    let article = db::article::get_article(article_id, &app_data.db_pool).await;
+
+    match article {
+        Ok(opt) => match opt {
+            Some(article) => {
+                if article.author_id != user_id {
+                    return HttpResponse::Unauthorized()
+                        .json("you dont have the permission to change other peoples articles");
+                }
+            }
+            None => return HttpResponse::NotFound().json("Article not found"),
+        },
+        Err(err) => return HttpResponse::InternalServerError().json(err.to_string()),
+    }
+
+    let res = db::article::update_article(article_id, body.into_inner(), &app_data.db_pool).await;
     match res {
         Ok(option) => match option {
             Some(article) => HttpResponse::Ok().json(article),
@@ -92,13 +153,7 @@ pub async fn update_article(
 #[delete("{article_id}")]
 pub async fn delete_article(path: Path<i32>, app_data: web::Data<AppState>) -> impl Responder {
     let article_id = path.into_inner();
-    let res = sqlx::query_as!(
-        Article,
-        "delete from articles where id = $1 returning *",
-        article_id
-    )
-    .fetch_optional(&app_data.db_pool)
-    .await;
+    let res = db::article::delete_article(article_id, &app_data.db_pool).await;
     match res {
         Ok(option) => match option {
             Some(article) => HttpResponse::Ok().json(article),
