@@ -1,3 +1,5 @@
+mod auth;
+mod db;
 mod models;
 mod routes;
 
@@ -27,6 +29,8 @@ async fn main() -> std::io::Result<()> {
             .configure(routes::users::config)
             .configure(routes::articles::config)
             .configure(routes::comments::config)
+            .configure(routes::likes::config)
+            .configure(routes::auth::config)
     })
     .bind(("127.0.0.1", 8080))?
     .run()

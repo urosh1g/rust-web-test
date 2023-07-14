@@ -5,5 +5,7 @@
 //ili je src/routes/mod.rs ovakav
 //od dva zla ovo prvo je lepse :D
 pub mod articles;
+pub mod auth;
 pub mod comments;
+pub mod likes;
 pub mod users;
