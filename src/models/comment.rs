@@ -1,6 +1,6 @@
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize)]
 pub struct Comment {
-    pub id: i32,
+    pub comment_id: i32,
     pub user_id: i32,    // TODO user: User
     pub article_id: i32, //      article: Article
     pub content: String,
