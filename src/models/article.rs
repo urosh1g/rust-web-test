@@ -41,12 +41,12 @@ pub struct ArticleUserJoin {
 
     pub user_id: i32,
     pub email: String,
+    #[serde(skip_serializing)]
     pub password: String,
 }
 
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize)]
 pub struct NewArticle {
-    pub author_id: i32,
     pub title: String,
     pub content: String,
 }
