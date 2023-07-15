@@ -6,9 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+actix-jwt-auth-middleware = "0.3.0"
 actix-web = "4.3.1"
 chrono = "0.4.26"
 dotenv = "0.15.0"
+exonum-crypto = "1.0.0"
+futures = "0.3.28"
 jsonwebtoken = "8.3.0"
+jwt-compact = { version = "0.7.0", features = ["ed25519-compact", "exonum-crypto"]}
 serde = { version = "1.0.171", features = ["derive"] }
 sqlx = { version = "0.7.0", features = ["sqlx-postgres", "postgres", "runtime-tokio"] }
