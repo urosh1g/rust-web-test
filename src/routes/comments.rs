@@ -22,7 +22,7 @@ pub async fn get_comments(data: web::Data<AppState>) -> impl Responder {
     match res {
         Ok(vec) => HttpResponse::Ok().json(
             vec.into_iter()
-                .map(|flat_comment| UserComment::from(flat_comment))
+                .map(UserComment::from)
                 .collect::<Vec<UserComment>>(),
         ),
         Err(err) => HttpResponse::InternalServerError().json(err.to_string()),

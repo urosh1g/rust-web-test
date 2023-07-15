@@ -28,11 +28,9 @@ pub async fn get_articles(app_data: web::Data<AppState>) -> impl Responder {
     let res = db::article::get_articles(&app_data.db_pool).await;
 
     match res {
-        Ok(vec) => HttpResponse::Ok().json(
-            vec.into_iter()
-                .map(|item| Article::from(item))
-                .collect::<Vec<Article>>(),
-        ),
+        Ok(vec) => {
+            HttpResponse::Ok().json(vec.into_iter().map(Article::from).collect::<Vec<Article>>())
+        }
         Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
     }
 }
@@ -72,7 +70,7 @@ pub async fn get_article_comments(path: Path<i32>, data: web::Data<AppState>) ->
     match res {
         Ok(vec) => HttpResponse::Ok().json(
             vec.into_iter()
-                .map(|flat_comment| UserComment::from(flat_comment))
+                .map(UserComment::from)
                 .collect::<Vec<UserComment>>(),
         ),
         Err(e) => HttpResponse::InternalServerError().json(e.to_string()),
@@ -86,7 +84,7 @@ pub async fn get_article_likes(path: Path<i32>, data: web::Data<AppState>) -> im
     match res {
         Ok(vec) => HttpResponse::Ok().json(
             vec.into_iter()
-                .map(|flat_like| UserLike::from(flat_like))
+                .map(UserLike::from)
                 .collect::<Vec<UserLike>>(),
         ),
         Err(e) => HttpResponse::InternalServerError().json(e.to_string()),
