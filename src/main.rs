@@ -1,4 +1,3 @@
-mod auth;
 mod db;
 mod models;
 mod routes;
@@ -12,7 +11,7 @@ use sqlx::{
 use std::env;
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> Result<(), std::boxed::Box<dyn std::error::Error>> {
     let db_config = read_configuration();
     println!("Successfully read the .env config");
     let db = db_connect(db_config).await;
@@ -30,11 +29,11 @@ async fn main() -> std::io::Result<()> {
             .configure(routes::articles::config)
             .configure(routes::comments::config)
             .configure(routes::likes::config)
-            .configure(routes::auth::config)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
-    .await
+    .await?;
+    Ok(())
 }
 
 pub struct AppState {
@@ -49,7 +48,6 @@ struct DbConfig {
 fn read_configuration() -> DbConfig {
     dotenv().expect("Should be able to read environment variables");
     let conn_str = env::var("DATABASE_URL").expect("Should be able to read connection string");
-    // TODO nadji lepsi nacin za parsiranje
     let max_conn: u32 = match env::var("MAX_CONNECTIONS") {
         Ok(val) => val.parse().unwrap_or(100),
         Err(_) => 100,
