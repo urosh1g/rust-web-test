@@ -1,7 +1,4 @@
-use crate::models::{
-    article::{Article, ArticleUserJoin, DbArticle, NewArticle, UpdateArticle},
-    user::User,
-};
+use crate::models::article::{ArticleUserJoin, NewArticle, UpdateArticle};
 use sqlx::{Error, Pool, Postgres};
 
 pub async fn get_articles(executor: &Pool<Postgres>) -> Result<Vec<ArticleUserJoin>, Error> {
@@ -27,37 +24,24 @@ pub async fn get_article(
 }
 
 pub async fn add_article(
+    author_id: i32,
     article: NewArticle,
     executor: &Pool<Postgres>,
-) -> Result<Option<Article>, Error> {
+) -> Result<Option<ArticleUserJoin>, Error> {
     sqlx::query_as!(
-        User,
-        "select * from users where user_id = $1",
-        article.author_id
-    )
-    .fetch_optional(executor)
-    .await?;
-    sqlx::query_as!(
-        DbArticle,
-        "insert into articles ( author_id, title, content ) values ( $1, $2, $3 ) returning *",
-        article.author_id,
+        ArticleUserJoin,
+        r#"with inserted_article as (
+            insert into articles 
+            ( author_id, title, content ) 
+            values ( $1, $2, $3 ) returning *)
+        select * from inserted_article inner join users
+        on author_id = user_id"#,
+        author_id,
         article.title,
         article.content
     )
     .fetch_optional(executor)
-    .await?;
-    let res = sqlx::query_as!(
-        ArticleUserJoin,
-        "select * from articles inner join users on author_id = user_id where user_id = $1",
-        article.author_id
-    )
-    .fetch_optional(executor)
-    .await?;
-    if let Some(article_join) = res {
-        Ok(Some(Article::from(article_join)))
-    } else {
-        Err(sqlx::Error::RowNotFound)
-    }
+    .await
 }
 
 pub async fn update_article(
@@ -65,13 +49,19 @@ pub async fn update_article(
     update_fields: UpdateArticle,
     executor: &Pool<Postgres>,
 ) -> Result<Option<ArticleUserJoin>, Error> {
-    sqlx::query_as!(ArticleUserJoin,
-        "update articles set title = coalesce($1, title), content = coalesce($2, content) from users where article_id = $3 and author_id = user_id returning *", 
+    sqlx::query_as!(
+        ArticleUserJoin,
+        r#"update articles 
+        set title = coalesce($1, title), 
+        content = coalesce($2, content) 
+        from users where article_id = $3 and author_id = user_id 
+        returning *"#,
         update_fields.title,
         update_fields.content,
-        article_id)
-        .fetch_optional(executor)
-        .await
+        article_id
+    )
+    .fetch_optional(executor)
+    .await
 }
 
 pub async fn delete_article(
@@ -81,7 +71,7 @@ pub async fn delete_article(
     sqlx::query_as!(
         ArticleUserJoin,
         "delete from articles using users where article_id = $1 returning *",
-        article_id
+        article_id,
     )
     .fetch_optional(executor)
     .await
