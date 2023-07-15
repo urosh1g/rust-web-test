@@ -24,7 +24,6 @@ pub async fn get_article(
 }
 
 pub async fn add_article(
-    author_id: i32,
     article: NewArticle,
     executor: &Pool<Postgres>,
 ) -> Result<Option<ArticleUserJoin>, Error> {
@@ -36,7 +35,7 @@ pub async fn add_article(
             values ( $1, $2, $3 ) returning *)
         select * from inserted_article inner join users
         on author_id = user_id"#,
-        author_id,
+        article.author_id,
         article.title,
         article.content
     )

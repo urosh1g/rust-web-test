@@ -40,7 +40,7 @@ pub async fn add_article(
     body: web::Json<NewArticle>,
     app_data: web::Data<AppState>,
 ) -> impl Responder {
-    let res = db::article::add_article(1, body.into_inner(), &app_data.db_pool).await;
+    let res = db::article::add_article(body.into_inner(), &app_data.db_pool).await;
 
     match res {
         Ok(Some(flat_article)) => HttpResponse::Created().json(Article::from(flat_article)),

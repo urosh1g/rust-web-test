@@ -47,6 +47,7 @@ pub struct ArticleUserJoin {
 
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize)]
 pub struct NewArticle {
+    pub author_id: i32,
     pub title: String,
     pub content: String,
 }
